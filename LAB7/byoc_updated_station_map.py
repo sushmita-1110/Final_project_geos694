@@ -15,7 +15,7 @@ Input
 Output
 ------
 - AK_station_alaska_map.png
-  A PNG image of the Alaska AK(network) station map.
+  A PNG image of the Alaska AK (network) station map.
 
 How to run
 ----------

@@ -1,5 +1,7 @@
 from pathlib import Path
-import numpy as np, pandas as pd, matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from scipy.signal import spectrogram
 from matplotlib.gridspec import GridSpec
 from obspy import UTCDateTime, read

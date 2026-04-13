@@ -18,10 +18,6 @@ def parse_time(x):
     try: return UTCDateTime(str(x).strip())
     except: return None
 
-def loc_tag(x):
-    x = str(x).strip()
-    return "NONE" if x == "" else "DASHDASH" if x == "--" else x
-
 def remove_median(S):
     return np.clip(S - np.median(S, axis=1, keepdims=True), 0, None)
 
@@ -141,16 +137,19 @@ def main():
             fail += 1
             continue
 
+        
         net = str(r["network"]).strip().upper()
         sta = str(r["station"]).strip().upper()
         cha = str(r["channel"]).strip().upper()
         loc = str(r["location"]).strip()
-        aircraft = str(r.get("equipment_x", "UNK")).strip()
-        outdir = OUTPUT_ROOT / net / sta / cha / loc_tag(loc)
+        location = loc if loc else "NONE"
+        aircraft = str(r.get("equipment_x", "")).strip()
 
-        made = make_spectrogram(mseed, t0, aircraft, net, sta, cha, loc, outdir, r["d0_rank"])
-        ok += made is not None
-        fail += made is None
+        outdir = OUTPUT_ROOT / net / sta / cha / location
+
+        made = make_spectrogram(
+            mseed, t0, aircraft, net, sta,
+            cha, location, outdir, r["d0_rank"])
 
 if __name__ == "__main__":
     main()    

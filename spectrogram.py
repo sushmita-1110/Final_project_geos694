@@ -6,8 +6,8 @@ from scipy.signal import spectrogram
 from matplotlib.gridspec import GridSpec
 from obspy import UTCDateTime, read
 
-SUMMARY_CSV = Path("/home/smaurya/repository/parkshwynodal/local_data_fetch/ALL_NETWORKS_WAVEFORMS/50closest.csv")
-OUTPUT_ROOT = Path("/home/smaurya/repository/parkshwynodal/local_data_fetch/spectrogram_closest50")
+SUMMARY_CSV = Path("/input/crossings.csv")
+OUTPUT_ROOT = Path("/output/spectrogram")
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 WINDOW_SEC = 120

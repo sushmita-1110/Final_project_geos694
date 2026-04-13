@@ -12,13 +12,17 @@ OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 WINDOW_SEC = 120
 WIN_LEN = 1
+
+# Highpass filter frequency in Hz
 HP_FREQ = 10.0
 
 def parse_time(x):
+    """ Convert input value to Obspy UTCDateTime """
     try: return UTCDateTime(str(x).strip())
     except: return None
 
 def remove_median(S):
+    """ Remove frequency-wise median """
     return np.clip(S - np.median(S, axis=1, keepdims=True), 0, None)
 
 def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=0):
@@ -95,9 +99,11 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         ax2.set_xlim(0, 2 * WINDOW_SEC)
         ax2.set_ylim(0, int(fs / 2))
 
+        # Colourbar
         cb = plt.colorbar(im, cax=ax3)
         cb.set_label("Relative Amplitude (dB)")
-
+ 
+        # Side spectrum panel
         ax4.plot(side, fside, color="#ff7f00", lw=1.5)
         ax4.set_ylim(0, int(fs / 2))
         ax4.invert_xaxis()
@@ -107,6 +113,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         ax4.tick_params(bottom=False, labelbottom=False, left=True, labelleft=True)
         ax4.grid(axis="y", alpha=0.3)
 
+        # Save output PNG
         outdir.mkdir(parents=True, exist_ok=True)
         safe_time = t0.strftime("%Y-%m-%dT%H-%M-%S")
         aircraft = str(aircraft).strip().replace("/", "_").replace(" ", "_")
@@ -122,10 +129,13 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             plt.close(fig)
 
 def main():
+    # Read csv
     df = pd.read_csv(SUMMARY_CSV)
     df = df[df["status"] == "saved"].drop_duplicates("outfile").copy()
     df["location"] = df["location"].fillna("").astype(str).str.strip()
     df["d0_m"] = pd.to_numeric(df["d0_m"], errors="coerce")
+
+    # Sort by station grouping and distant (d0) rank
     df = df.sort_values(["network", "station", "channel", "location", "d0_m"])
     df["d0_rank"] = df.groupby(["network", "station", "channel", "location"]).cumcount() + 1
 
@@ -137,16 +147,17 @@ def main():
             fail += 1
             continue
 
-        
+        # Extract metadata
         net = str(r["network"]).strip().upper()
         sta = str(r["station"]).strip().upper()
         cha = str(r["channel"]).strip().upper()
         loc = str(r["location"]).strip()
         location = loc if loc else "NONE"
-        aircraft = str(r.get("equipment_x", "")).strip()
+        aircraft = str(r.get("equipment", "")).strip()
 
         outdir = OUTPUT_ROOT / net / sta / cha / location
 
+        # Generate spectrogram
         made = make_spectrogram(
             mseed, t0, aircraft, net, sta,
             cha, location, outdir, r["d0_rank"])

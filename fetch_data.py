@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from obspy import UTCDateTime
@@ -12,6 +13,7 @@ OUTPUT_ROOT = Path("output/miniSEED")
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 TIME_WINDOW = 120
+MAX_WORKERS = 4
 
 # Network configurations
 
@@ -211,11 +213,18 @@ def main():
         if net_df.empty:
             continue
 
-        for _, row in net_df.iterrows():
-            try:
-                total_saved += process_row(row, network, channels, locations)
-            except Exception as e:
-                print(f"Row failed: {e}")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [
+                executor.submit(process_row, row, network, channels, locations)
+                for _, row in net_df.iterrows()
+                ]
+            
+            for future in as_completed(futures):
+                try:
+                    total_saved += future.result()
+                except Exception as e:
+                    print(f"Worker failed: {e}")
+
 
     print(f"TOTAL MiniSEED files saved: {total_saved}")
     print(f"Output directory: {OUTPUT_ROOT}")

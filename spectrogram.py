@@ -6,8 +6,8 @@ from scipy.signal import spectrogram
 from matplotlib.gridspec import GridSpec
 from obspy import UTCDateTime, read
 
-SUMMARY_CSV = Path("/input/crossings.csv")
-OUTPUT_ROOT = Path("/output/spectrogram")
+SUMMARY_CSV = Path("crossings_final50.txt")
+OUTPUT_ROOT = Path("output/spectrogram")
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 WINDOW_SEC = 120
@@ -17,27 +17,32 @@ WIN_LEN = 1
 HP_FREQ = 10.0
 
 def parse_time(x):
-    """ Convert input value to Obspy UTCDateTime """
-    try: return UTCDateTime(str(x).strip())
-    except: return None
+    """ Convert an input value to ObsPy UTCDateTime. """
+    try: 
+        return UTCDateTime(str(x).strip())
+    except Exception: 
+        return None
 
 def remove_median(S):
-    """ Remove frequency-wise median """
+    """ Remove the frequency-wise median """
     return np.clip(S - np.median(S, axis=1, keepdims=True), 0, None)
 
 def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=0):
     fig = None
     try:
         st = read(str(mseed_file))
-        if not st: return None
+        if not st: 
+            return None
         st.merge(method=1, fill_value=0)
         tr = st[0]
-        if not (tr.stats.starttime <= t0 <= tr.stats.endtime): return None
+        if not (tr.stats.starttime <= t0 <= tr.stats.endtime): 
+            return None
         tr.trim(t0 - WINDOW_SEC, t0 + WINDOW_SEC, pad=True, fill_value=0)
 
         raw = tr.data.astype(float)
         fs = float(tr.stats.sampling_rate)
-        if fs / 2 <= HP_FREQ: return None
+        if fs / 2 <= HP_FREQ: 
+            return None
 
         trf = tr.copy()
         trf.detrend("demean")
@@ -46,24 +51,29 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         wf, tw = trf.data.astype(float), trf.times()
 
         nper = max(int(WIN_LEN * fs), 8)
-        if len(raw) < 2 * nper: return None
+        if len(raw) < 2 * nper: 
+            return None
         f, t, Sxx = spectrogram(raw, fs, scaling="density", nperseg=nper,
                                 noverlap=int(0.9 * nper), detrend="constant")
-        if Sxx.shape[1] < 2: return None
+        if Sxx.shape[1] < 2: 
+            return None
 
         spec = 10 * np.log10(remove_median(Sxx) + 1e-12)
         mask = f >= HP_FREQ
-        if not np.any(mask): return None
+        if not np.any(mask): 
+            return None
 
         spec2 = spec[mask]
         finite_all = spec2[np.isfinite(spec2)]
         finite_mid = spec2[:, len(t)//2]
         finite_mid = finite_mid[np.isfinite(finite_mid)]
-        if finite_all.size == 0 or finite_mid.size == 0: return None
+        if finite_all.size == 0 or finite_mid.size == 0: 
+            return None
 
         vmin = np.percentile(finite_all, 65)
         vmax = np.max(finite_mid)
-        if vmax <= vmin: vmax = vmin + 1
+        if vmax <= vmin: 
+            vmax = vmin + 1
 
         side = 10 * np.log10(np.median(Sxx[mask], axis=1) + 1e-12)
         fside = f[mask]
@@ -76,7 +86,8 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
                       width_ratios=[0.10, 1, 0.03],   # thinner left figure
                       hspace=0.22, wspace=0.06)
 
-        ax_blank = fig.add_subplot(gs[0, 0]); ax_blank.axis("off")
+        ax_blank = fig.add_subplot(gs[0, 0]); 
+        ax_blank.axis("off")
         ax1 = fig.add_subplot(gs[0, 1])
         ax4 = fig.add_subplot(gs[1, 0])
         ax2 = fig.add_subplot(gs[1, 1])
@@ -92,7 +103,8 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             lim = np.percentile(np.abs(good), 99.5)
             if lim > 0: ax1.set_ylim(-2.5 * lim, 2.5 * lim)
 
-        im = ax2.pcolormesh(t, f, spec, shading="gouraud", cmap="pink_r", vmin=vmin, vmax=vmax)
+        im = ax2.pcolormesh(t, f, spec, shading="gouraud", 
+                            cmap="pink_r", vmin=vmin, vmax=vmax)
         ax2.set_xlabel("Time (s)")
         ax2.set_ylabel("")
         ax2.tick_params(left=False, labelleft=False)
@@ -129,38 +141,55 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             plt.close(fig)
 
 def main():
-    # Read csv
-    df = pd.read_csv(SUMMARY_CSV)
-    df = df[df["status"] == "saved"].drop_duplicates("outfile").copy()
-    df["location"] = df["location"].fillna("").astype(str).str.strip()
-    df["d0_m"] = pd.to_numeric(df["d0_m"], errors="coerce")
+    # Read crossing file
+    df = pd.read_csv(SUMMARY_CSV, sep="\t")
+    df.columns = df.columns.str.strip()
 
-    # Sort by station grouping and distant (d0) rank
+    df["time_str"] = df["time_str"].apply(parse_time)
+    df["network"] = df["network"].astype(str).str.strip()
+    df["station"] = df["station"].astype(str).str.strip()
+    df["channel"] = df["channel"].fillna("").astype(str).str.strip()
+    df["location"] = df["location"].fillna("").astype(str).str.strip()
+    df["equipment"] = df["equipment"].fillna("").astype(str).str.strip()
+    df["d0_m"] = pd.to_numeric(df["d0_m"], errors="coerce")
+    df = df.dropna(subset=["time_str", "network", "station", "channel"]).copy()
+
+    def build_outfile(r):
+        loc_tag = r["location"] if r["location"] else "NONE"
+        time_tag = r["time_str"].strftime("%Y-%m-%dT%H-%M-%S")
+        filename = (
+            f'{r["network"]}.{r["station"]}.{loc_tag}.'
+            f'{r["channel"]}_{time_tag}.mseed'
+        )
+        return Path("output/miniSEED") / r["network"] / r["station"] / filename
+    
+    df["outfile"] = df.apply(build_outfile, axis=1)
+    df = df[df["outfile"].apply(lambda p: p.exists())].copy()
+
+
+    # Rank rows by distance (d0) rank within each station/channel/location group
     df = df.sort_values(["network", "station", "channel", "location", "d0_m"])
-    df["d0_rank"] = df.groupby(["network", "station", "channel", "location"]).cumcount() + 1
+    df["d0_rank"] = df.groupby(["network", "station", 
+                                "channel", "location"]).cumcount() + 1
 
     ok = fail = 0
     for _, r in df.iterrows():
-        t0 = parse_time(r["time_str"])
-        mseed = Path(str(r["outfile"]).strip())
-        if t0 is None or not mseed.exists():
-            fail += 1
-            continue
-
-        # Extract metadata
-        net = str(r["network"]).strip().upper()
-        sta = str(r["station"]).strip().upper()
-        cha = str(r["channel"]).strip().upper()
-        loc = str(r["location"]).strip()
-        location = loc if loc else "NONE"
-        aircraft = str(r.get("equipment", "")).strip()
-
-        outdir = OUTPUT_ROOT / net / sta / cha / location
-
-        # Generate spectrogram
+        loc = r["location"] if r["location"] else "NONE"
         made = make_spectrogram(
-            mseed, t0, aircraft, net, sta,
-            cha, location, outdir, r["d0_rank"])
+            r["outfile"], r["time_str"], r["equipment"],
+            r["network"], r["station"], r["channel"], loc,
+            OUTPUT_ROOT / r["network"] / r["station"] / r["channel"] / loc,
+            r["d0_rank"],
+        )
+
+        if made:
+            ok += 1
+        else:
+            fail += 1
+
+    print(f"Spectrograms created: {ok}")
+    print(f"Rows failed: {fail}")
+
 
 if __name__ == "__main__":
     main()    

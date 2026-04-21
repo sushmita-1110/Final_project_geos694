@@ -1,0 +1,14 @@
+name: aircraftseismo
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - numpy
+  - pandas
+  - matplotlib
+  - scipy
+  - obspy
+  - pyproj
+  - cartopy
+  - pip

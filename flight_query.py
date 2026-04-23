@@ -1,5 +1,6 @@
 from pathlib import Path
 import math
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.ticker as mticker
@@ -423,13 +424,7 @@ class FlightVizPDF:
 
         ax.plot([x0, x0 + length_deg], [y0, y0], "k-", linewidth=1.5, **plot_kwargs)
         ax.plot([x0, x0], [y0 - tick_h, y0 + tick_h], "k-", linewidth=1, **plot_kwargs)
-        ax.plot(
-            [x0 + length_deg, x0 + length_deg],
-            [y0 - tick_h, y0 + tick_h],
-            "k-",
-            linewidth=1,
-            **plot_kwargs,
-        )
+        ax.plot([x0 + length_deg, x0 + length_deg], [y0 - tick_h, y0 + tick_h], "k-", linewidth=1, **plot_kwargs)
         ax.text(
             x0 + length_deg / 2.0,
             y0 + tick_h * 2.5,
@@ -488,205 +483,135 @@ class FlightVizPDF:
                     st["lon"], st["lat"] + offset, ccrs.PlateCarree()
                 )
                 FlightVizPDF._station_label(
-                    ax,
-                    st,
-                    coord[0],
-                    coord[1],
-                    text_coord[0],
-                    text_coord[1],
-                    projection,
+                    ax, st, coord[0], coord[1], text_coord[0], text_coord[1], projection
                 )
             return
 
         for st in stations:
             FlightVizPDF._station_label(
-                ax,
-                st,
-                st["lon"],
-                st["lat"],
-                st["lon"],
-                st["lat"] + offset,
+                ax, st, st["lon"], st["lat"], st["lon"], st["lat"] + offset
             )
 
     def _draw_main_map(self, fig, flight, geom, stations):
         bbox, fz = geom["bbox"], geom["fz"]
-        try:
 
-            proj = ccrs.AlbersEqualArea(
-                central_longitude=-154,
-                central_latitude=50,
-                standard_parallels=(55, 65),
-            )
-            ax = fig.add_axes([0.38, 0.48, 0.52, 0.37], projection=proj)
-            ax.set_extent(
-                [bbox["lon_min"], bbox["lon_max"], bbox["lat_min"], bbox["lat_max"]],
-                crs=ccrs.PlateCarree(),
-            )
-            ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="wheat", zorder=1)
-            ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="lightblue", zorder=0)
-            ax.add_feature(cfeature.COASTLINE.with_scale("50m"), linewidth=0.8, zorder=2)
-            ax.add_feature(cfeature.BORDERS.with_scale("50m"), linestyle=":", linewidth=0.5, zorder=2)
+        proj = ccrs.AlbersEqualArea(
+            central_longitude=-154,
+            central_latitude=50,
+            standard_parallels=(55, 65),
+        )
+        ax = fig.add_axes([0.38, 0.48, 0.52, 0.37], projection=proj)
+        ax.set_extent(
+            [bbox["lon_min"], bbox["lon_max"], bbox["lat_min"], bbox["lat_max"]],
+            crs=ccrs.PlateCarree(),
+        )
+        ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="wheat", zorder=1)
+        ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="lightblue", zorder=0)
+        ax.add_feature(cfeature.COASTLINE.with_scale("50m"), linewidth=0.8, zorder=2)
+        ax.add_feature(
+            cfeature.BORDERS.with_scale("50m"),
+            linestyle=":",
+            linewidth=0.5,
+            zorder=2,
+        )
 
-            coords = proj.transform_points(
-                ccrs.PlateCarree(),
-                flight["longitude"].values,
-                flight["latitude"].values,
-            )
-            px, py = coords[:, 0], coords[:, 1]
-            scatter = ax.scatter(
-                px,
-                py,
-                c=fz,
-                cmap="viridis",
-                s=50,
-                alpha=0.8,
-                transform=proj,
-                zorder=3,
-                edgecolors="none",
-            )
-            ax.plot(px, py, "k-", lw=1, alpha=0.3, transform=proj, zorder=2)
+        coords = proj.transform_points(
+            ccrs.PlateCarree(),
+            flight["longitude"].values,
+            flight["latitude"].values,
+        )
+        px, py = coords[:, 0], coords[:, 1]
+        scatter = ax.scatter(
+            px,
+            py,
+            c=fz,
+            cmap="viridis",
+            s=50,
+            alpha=0.8,
+            transform=proj,
+            zorder=3,
+            edgecolors="none",
+        )
+        ax.plot(px, py, "k-", lw=1, alpha=0.3, transform=proj, zorder=2)
 
-            sxy = proj.transform_point(
-                geom["start_lon"], geom["start_lat"], ccrs.PlateCarree()
-            )
-            exy = proj.transform_point(
-                geom["end_lon"], geom["end_lat"], ccrs.PlateCarree()
-            )
-            ax.plot(
-                [sxy[0], exy[0]],
-                [sxy[1], exy[1]],
-                "r--",
-                lw=2,
-                alpha=0.7,
-                transform=proj,
-                zorder=2,
-            )
+        sxy = proj.transform_point(
+            geom["start_lon"], geom["start_lat"], ccrs.PlateCarree()
+        )
+        exy = proj.transform_point(
+            geom["end_lon"], geom["end_lat"], ccrs.PlateCarree()
+        )
+        ax.plot(
+            [sxy[0], exy[0]],
+            [sxy[1], exy[1]],
+            "r--",
+            lw=2,
+            alpha=0.7,
+            transform=proj,
+            zorder=2,
+        )
 
-            cax = fig.add_axes([0.92, 0.48, 0.015, 0.37])
-            cbar = plt.colorbar(scatter, cax=cax)
-            cbar.set_label("Elevation (m)", fontsize=9, fontweight="bold")
-            cbar.ax.tick_params(labelsize=8)
+        cax = fig.add_axes([0.92, 0.48, 0.015, 0.37])
+        cbar = plt.colorbar(scatter, cax=cax)
+        cbar.set_label("Elevation (m)", fontsize=9, fontweight="bold")
+        cbar.ax.tick_params(labelsize=8)
 
-            self._marker(ax, sxy[0], sxy[1], "S", "green", transform=proj, zorder=6)
-            self._marker(ax, exy[0], exy[1], "E", "red", transform=proj, zorder=6)
-            self._plot_stations(ax, stations, bbox, projection=proj)
+        self._marker(ax, sxy[0], sxy[1], "S", "green", transform=proj, zorder=6)
+        self._marker(ax, exy[0], exy[1], "E", "red", transform=proj, zorder=6)
+        self._plot_stations(ax, stations, bbox, projection=proj)
 
-            gl = ax.gridlines(
-                draw_labels=True,
-                dms=False,
-                x_inline=False,
-                y_inline=False,
-                linewidth=0.8,
-                color="gray",
-                alpha=0.4,
-                linestyle="--",
-            )
-            gl.top_labels = False
-            gl.right_labels = False
-            gl.xlabel_style = {"size": 8}
-            gl.ylabel_style = {"size": 8}
-            gl.xformatter = mticker.FuncFormatter(lambda x, pos: f"{abs(x):.1f}")
-            gl.yformatter = mticker.FuncFormatter(lambda y, pos: f"{abs(y):.1f}")
-            self._scale_bar(ax, bbox, use_cartopy=True)
-
-        except ImportError:
-            ax = fig.add_axes([0.38, 0.55, 0.52, 0.3])
-            scatter = ax.scatter(
-                flight["longitude"],
-                flight["latitude"],
-                c=fz,
-                cmap="viridis",
-                s=50,
-                alpha=0.8,
-                zorder=2,
-                edgecolors="none",
-            )
-            ax.plot(
-                flight["longitude"],
-                flight["latitude"],
-                "k-",
-                lw=1,
-                alpha=0.3,
-                zorder=1,
-            )
-            ax.plot(
-                [geom["start_lon"], geom["end_lon"]],
-                [geom["start_lat"], geom["end_lat"]],
-                "r--",
-                lw=2,
-                alpha=0.7,
-                zorder=1,
-            )
-
-            cax = fig.add_axes([0.92, 0.55, 0.015, 0.3])
-            cbar = plt.colorbar(scatter, cax=cax)
-            cbar.set_label("Elevation (m)", fontsize=9, fontweight="bold")
-            cbar.ax.tick_params(labelsize=8)
-
-            self._marker(ax, geom["start_lon"], geom["start_lat"], "S", "green", zorder=5)
-            self._marker(ax, geom["end_lon"], geom["end_lat"], "E", "red", zorder=5)
-            self._plot_stations(ax, stations, bbox)
-            ax.set_xlabel("Longitude", fontsize=10, fontweight="bold")
-            ax.set_ylabel("Latitude", fontsize=10, fontweight="bold")
-            ax.grid(True, alpha=0.3, linestyle="--")
-            ax.set_xlim(bbox["lon_min"], bbox["lon_max"])
-            ax.set_ylim(bbox["lat_min"], bbox["lat_max"])
-            self._scale_bar(ax, bbox)
-            for spine in ax.spines.values():
-                spine.set_edgecolor("black")
-                spine.set_linewidth(2)
+        gl = ax.gridlines(
+            draw_labels=True,
+            dms=False,
+            x_inline=False,
+            y_inline=False,
+            linewidth=0.8,
+            color="gray",
+            alpha=0.4,
+            linestyle="--",
+        )
+        gl.top_labels = False
+        gl.right_labels = False
+        gl.xlabel_style = {"size": 8}
+        gl.ylabel_style = {"size": 8}
+        gl.xformatter = mticker.FuncFormatter(lambda x, pos: f"{abs(x):.1f}")
+        gl.yformatter = mticker.FuncFormatter(lambda y, pos: f"{abs(y):.1f}")
+        self._scale_bar(ax, bbox, use_cartopy=True)
 
     def _draw_inset(self, fig, geom):
-        try:
+        proj = ccrs.AlbersEqualArea(
+            central_longitude=-154,
+            central_latitude=50,
+            standard_parallels=(55, 65),
+        )
+        ax = fig.add_axes([0.18, 0.72, 0.15, 0.12], projection=proj)
+        ax.set_extent([-172, -128, 51, 72], crs=ccrs.PlateCarree())
+        ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="wheat", zorder=1)
+        ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="lightblue", zorder=0)
+        ax.add_feature(
+            cfeature.BORDERS.with_scale("50m"),
+            linestyle=":",
+            linewidth=0.5,
+            zorder=2,
+        )
 
-            proj = ccrs.AlbersEqualArea(
-                central_longitude=-154,
-                central_latitude=50,
-                standard_parallels=(55, 65),
-            )
-            ax = fig.add_axes([0.18, 0.72, 0.15, 0.12], projection=proj)
-            ax.set_extent([-172, -128, 51, 72], crs=ccrs.PlateCarree())
-            ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="wheat", zorder=1)
-            ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="lightblue", zorder=0)
-            ax.add_feature(cfeature.BORDERS.with_scale("50m"), linestyle=":", linewidth=0.5, zorder=2)
-
-            self._marker(
-                ax,
-                geom["start_lon"],
-                geom["start_lat"],
-                "S",
-                "green",
-                transform=ccrs.PlateCarree(),
-                zorder=12,
-            )
-            self._marker(
-                ax,
-                geom["end_lon"],
-                geom["end_lat"],
-                "E",
-                "red",
-                transform=ccrs.PlateCarree(),
-                zorder=12,
-            )
-
-        except ImportError:
-            ax = fig.add_axes([0.18, 0.72, 0.15, 0.12])
-            ax.plot(
-                [-172, -172, -130, -130, -172],
-                [52, 72, 72, 52, 52],
-                "k-",
-                lw=1.5,
-            )
-            ax.fill(
-                [-172, -172, -130, -130, -172],
-                [52, 72, 72, 52, 52],
-                color="lightgray",
-                alpha=0.7,
-            )
-            self._marker(ax, geom["start_lon"], geom["start_lat"], "S", "green", zorder=7)
-            self._marker(ax, geom["end_lon"], geom["end_lat"], "E", "red", zorder=7)
-            ax.set_xlim(-172, -128)
-            ax.set_ylim(51, 73)
+        self._marker(
+            ax,
+            geom["start_lon"],
+            geom["start_lat"],
+            "S",
+            "green",
+            transform=ccrs.PlateCarree(),
+            zorder=12,
+        )
+        self._marker(
+            ax,
+            geom["end_lon"],
+            geom["end_lat"],
+            "E",
+            "red",
+            transform=ccrs.PlateCarree(),
+            zorder=12,
+        )
 
         ax.set_xticks([])
         ax.set_yticks([])
@@ -874,12 +799,8 @@ class FlightVizPDF:
 
 
 def ask_date_range():
-    start_date = (
-        input("Start date YYYYMMDD, Enter for all: ").strip() or None
-    )
-    end_date = (
-        input("End date, Enter for one date: ").strip() if start_date else None
-    )
+    start_date = input("Start date YYYYMMDD, Enter for all: ").strip() or None
+    end_date = input("End date, Enter for one date: ").strip() if start_date else None
     return start_date, (end_date or start_date if start_date else None)
 
 

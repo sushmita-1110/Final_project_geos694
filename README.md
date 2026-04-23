@@ -62,3 +62,15 @@ I selected the following items from Task 2:
 ```bash
 git clone git@github.com:sushmita-1110/Final_project_geos694.git
 cd Final_project_geos694
+
+## Installation
+
+This project is intended to run in a Conda environment.
+
+### Create environment
+
+```bash
+conda env create -f environment.yaml
+conda activate aircraftseismo
+
+## Acknowledgments Parts of this workflow were developed with guidance from and inspiration from existing code by **Bella Seppi**. Some ideas and code structure were adapted from the following repository: - uafgeotools/parkshwynodal(https://github.com/uafgeotools/parkshwynodal) Thank you to **Bella Seppi** for making related workflow components and research code available.

@@ -1,12 +1,11 @@
 from pathlib import Path
-from datetime import datetime
 import math
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyproj
-from matplotlib.backends.backend_pdf import PdfPages
+
 
 FLIGHT_DIR = Path("/scratch/irseppi/nodal_data/flightradar24")
 STATION_FILE = Path(
@@ -18,7 +17,7 @@ CROSSING_FILE = Path(
 
 
 class FlightVizPDF:
-    """Query aircraft crossings and generate flight-path PDF reports."""
+    """Query aircraft crossings and generate flight-path PDF."""
 
     def __init__(self, flight_dir, station_file, crossing_file, utm_zone=6):
         self.flight_dir = Path(flight_dir)
@@ -63,31 +62,7 @@ class FlightVizPDF:
             return None
 
     @staticmethod
-    def _date_text(start_date, end_date):
-        if not start_date:
-            return "All dates"
-        return start_date if not end_date or end_date == start_date else f"{start_date} to {end_date}"
-
-    @staticmethod
-    def _report(df):
-        print(
-            "No flights found"
-            if df.empty
-            else f"Found {df['flight_num'].nunique()} flights and {len(df)} crossings"
-        )
-        return df
-
-    @staticmethod
-    def _print_header(title, **items):
-        print(title)
-        for key, value in items.items():
-            if value not in (None, "", "All dates"):
-                print(f"{key}: {value}")
-
-    def _flight_path(self, date, flight_num):
-        return self.flight_dir / f"{date}_positions" / f"{date}_{flight_num}.csv"
-
-    def _filter(self, df, start_date=None, end_date=None, max_crossing_km=None):
+    def _filter_crossings(df, start_date=None, end_date=None, max_crossing_km=None):
         if start_date:
             end_date = end_date or start_date
             df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
@@ -108,7 +83,8 @@ class FlightVizPDF:
 
     @staticmethod
     def cumulative_distance(x, y, z=None, mode="horizontal"):
-        x, y = np.asarray(x), np.asarray(y)
+        x = np.asarray(x)
+        y = np.asarray(y)
         if mode == "horizontal":
             step = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2)
         elif mode == "true3d" and z is not None:
@@ -128,6 +104,9 @@ class FlightVizPDF:
             j1 = min(len(values), i + window // 2 + 1)
             out[i] = np.mean(values[j0:j1])
         return out
+
+    def _flight_path(self, date, flight_num):
+        return self.flight_dir / f"{date}_positions" / f"{date}_{flight_num}.csv"
 
     def load_flights_metadata(self, date):
         df = self._read_csv(self.flight_dir / f"{date}_flights.csv")
@@ -162,7 +141,8 @@ class FlightVizPDF:
             ),
             "equip": (
                 row["equip"]
-                if pd.notna(row.get("equip")) and str(row["equip"]).strip()
+                if pd.notna(row.get("equip"))
+                and str(row["equip"]).strip()
                 else "Unknown"
             ),
         }
@@ -170,16 +150,12 @@ class FlightVizPDF:
     def query_flights_by_numbers(
         self, flight_numbers, start_date=None, end_date=None, max_crossing_km=None
     ):
-        self._print_header(
-            "Query by flight number",
-            Flights=", ".join(map(str, flight_numbers)),
-            Date=self._date_text(start_date, end_date),
-            Max_km=max_crossing_km,
-        )
         df = self.crossings[
             self.crossings["flight_num"].isin([str(f) for f in flight_numbers])
         ].copy()
-        return self._report(self._filter(df, start_date, end_date, max_crossing_km))
+        df = self._filter_crossings(df, start_date, end_date, max_crossing_km)
+        print("No flights found" if df.empty else f"{len(df)} crossings")
+        return df
 
     def query_flights_by_station(
         self,
@@ -191,21 +167,14 @@ class FlightVizPDF:
     ):
         match = self.stations[self.stations["Station"] == station_name]
         if match.empty:
-            print(f"Station '{station_name}' not found")
+            print("Station not found")
             return pd.DataFrame()
 
         station_lon = match.iloc[0]["Longitude"]
         station_lat = match.iloc[0]["Latitude"]
-
-        self._print_header(
-            "Query by station",
-            Station=station_name,
-            Radius_km=radius_km,
-            Date=self._date_text(start_date, end_date),
-            Max_km=max_crossing_km,
+        df = self._filter_crossings(
+            self.crossings.copy(), start_date, end_date, max_crossing_km
         )
-
-        df = self._filter(self.crossings.copy(), start_date, end_date, max_crossing_km)
         keep = []
 
         for (date, flight_num), _ in df.groupby(["date", "flight_num"]):
@@ -225,13 +194,15 @@ class FlightVizPDF:
                 continue
 
         if not keep:
-            return self._report(pd.DataFrame())
+            print("No flights found")
+            return pd.DataFrame()
 
         out = pd.concat(
             [df[(df["date"] == d) & (df["flight_num"] == f)] for d, f in keep],
             ignore_index=True,
         )
-        return self._report(out)
+        print(f"{len(out)} crossings")
+        return out
 
     def query_flight_station_crossing(self, flight_num, station_name, date):
         df = self.crossings[
@@ -245,24 +216,18 @@ class FlightVizPDF:
             return df
 
         row = df.iloc[0]
-        print(
-            f"Found crossing: {flight_num} at {station_name}, "
-            f"{row['distance_m']:.0f} m, {row['time_str']}"
-        )
+        print(f"Found: {row['distance_m']:.0f} m, {row['time_str']}")
         return df
 
     def summarize_query_results(self, df):
-        if df.empty:
-            return
-        print(
-            f"{df['flight_num'].nunique()} flights, "
-            f"{len(df)} crossings, "
-            f"{df['date'].nunique()} dates"
-        )
+        if not df.empty:
+            print(f"{len(df)} crossings")
 
     def _geom(self, flight):
-        start_lon, start_lat = flight["longitude"].iloc[0], flight["latitude"].iloc[0]
-        end_lon, end_lat = flight["longitude"].iloc[-1], flight["latitude"].iloc[-1]
+        start_lon = flight["longitude"].iloc[0]
+        start_lat = flight["latitude"].iloc[0]
+        end_lon = flight["longitude"].iloc[-1]
+        end_lat = flight["latitude"].iloc[-1]
 
         fx, fy = zip(*[
             self.utm(lon, lat)
@@ -295,7 +260,12 @@ class FlightVizPDF:
         }
 
     def _speed(self, flight, geom):
-        fx, fy, fz, dist_h = geom["fx"], geom["fy"], geom["fz"], geom["dist_h"]
+        fx, fy, fz, dist_h = (
+            geom["fx"],
+            geom["fy"],
+            geom["fz"],
+            geom["dist_h"],
+        )
 
         if "snapshot_id" not in flight.columns:
             d = np.abs(np.diff(fz))
@@ -451,7 +421,13 @@ class FlightVizPDF:
 
         ax.plot([x0, x0 + length_deg], [y0, y0], "k-", linewidth=1.5, **plot_kwargs)
         ax.plot([x0, x0], [y0 - tick_h, y0 + tick_h], "k-", linewidth=1, **plot_kwargs)
-        ax.plot([x0 + length_deg, x0 + length_deg], [y0 - tick_h, y0 + tick_h], "k-", linewidth=1, **plot_kwargs)
+        ax.plot(
+            [x0 + length_deg, x0 + length_deg],
+            [y0 - tick_h, y0 + tick_h],
+            "k-",
+            linewidth=1,
+            **plot_kwargs,
+        )
         ax.text(
             x0 + length_deg / 2.0,
             y0 + tick_h * 2.5,
@@ -501,22 +477,34 @@ class FlightVizPDF:
     @staticmethod
     def _plot_stations(ax, stations, bbox, projection=None):
         offset = (bbox["lat_max"] - bbox["lat_min"]) * 0.035
-
         if projection is not None:
             import cartopy.crs as ccrs
             for st in stations:
-                coord = projection.transform_point(st["lon"], st["lat"], ccrs.PlateCarree())
+                coord = projection.transform_point(
+                    st["lon"], st["lat"], ccrs.PlateCarree()
+                )
                 text_coord = projection.transform_point(
                     st["lon"], st["lat"] + offset, ccrs.PlateCarree()
                 )
                 FlightVizPDF._station_label(
-                    ax, st, coord[0], coord[1], text_coord[0], text_coord[1], projection
+                    ax,
+                    st,
+                    coord[0],
+                    coord[1],
+                    text_coord[0],
+                    text_coord[1],
+                    projection,
                 )
             return
 
         for st in stations:
             FlightVizPDF._station_label(
-                ax, st, st["lon"], st["lat"], st["lon"], st["lat"] + offset
+                ax,
+                st,
+                st["lon"],
+                st["lat"],
+                st["lon"],
+                st["lat"] + offset,
             )
 
     def _draw_main_map(self, fig, flight, geom, stations):
@@ -548,14 +536,33 @@ class FlightVizPDF:
             )
             px, py = coords[:, 0], coords[:, 1]
             scatter = ax.scatter(
-                px, py, c=fz, cmap="viridis", s=50, alpha=0.8,
-                transform=proj, zorder=3, edgecolors="none",
+                px,
+                py,
+                c=fz,
+                cmap="viridis",
+                s=50,
+                alpha=0.8,
+                transform=proj,
+                zorder=3,
+                edgecolors="none",
             )
             ax.plot(px, py, "k-", lw=1, alpha=0.3, transform=proj, zorder=2)
 
-            sxy = proj.transform_point(geom["start_lon"], geom["start_lat"], ccrs.PlateCarree())
-            exy = proj.transform_point(geom["end_lon"], geom["end_lat"], ccrs.PlateCarree())
-            ax.plot([sxy[0], exy[0]], [sxy[1], exy[1]], "r--", lw=2, alpha=0.7, transform=proj, zorder=2)
+            sxy = proj.transform_point(
+                geom["start_lon"], geom["start_lat"], ccrs.PlateCarree()
+            )
+            exy = proj.transform_point(
+                geom["end_lon"], geom["end_lat"], ccrs.PlateCarree()
+            )
+            ax.plot(
+                [sxy[0], exy[0]],
+                [sxy[1], exy[1]],
+                "r--",
+                lw=2,
+                alpha=0.7,
+                transform=proj,
+                zorder=2,
+            )
 
             cax = fig.add_axes([0.92, 0.48, 0.015, 0.37])
             cbar = plt.colorbar(scatter, cax=cax)
@@ -596,7 +603,14 @@ class FlightVizPDF:
                 zorder=2,
                 edgecolors="none",
             )
-            ax.plot(flight["longitude"], flight["latitude"], "k-", lw=1, alpha=0.3, zorder=1)
+            ax.plot(
+                flight["longitude"],
+                flight["latitude"],
+                "k-",
+                lw=1,
+                alpha=0.3,
+                zorder=1,
+            )
             ax.plot(
                 [geom["start_lon"], geom["end_lon"]],
                 [geom["start_lat"], geom["end_lat"]],
@@ -640,13 +654,39 @@ class FlightVizPDF:
             ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="lightblue", zorder=0)
             ax.add_feature(cfeature.BORDERS.with_scale("50m"), linestyle=":", linewidth=0.5, zorder=2)
 
-            self._marker(ax, geom["start_lon"], geom["start_lat"], "S", "green", transform=ccrs.PlateCarree(), zorder=12)
-            self._marker(ax, geom["end_lon"], geom["end_lat"], "E", "red", transform=ccrs.PlateCarree(), zorder=12)
+            self._marker(
+                ax,
+                geom["start_lon"],
+                geom["start_lat"],
+                "S",
+                "green",
+                transform=ccrs.PlateCarree(),
+                zorder=12,
+            )
+            self._marker(
+                ax,
+                geom["end_lon"],
+                geom["end_lat"],
+                "E",
+                "red",
+                transform=ccrs.PlateCarree(),
+                zorder=12,
+            )
 
         except ImportError:
             ax = fig.add_axes([0.18, 0.72, 0.15, 0.12])
-            ax.plot([-172, -172, -130, -130, -172], [52, 72, 72, 52, 52], "k-", lw=1.5)
-            ax.fill([-172, -172, -130, -130, -172], [52, 72, 72, 52, 52], color="lightgray", alpha=0.7)
+            ax.plot(
+                [-172, -172, -130, -130, -172],
+                [52, 72, 72, 52, 52],
+                "k-",
+                lw=1.5,
+            )
+            ax.fill(
+                [-172, -172, -130, -130, -172],
+                [52, 72, 72, 52, 52],
+                color="lightgray",
+                alpha=0.7,
+            )
             self._marker(ax, geom["start_lon"], geom["start_lat"], "S", "green", zorder=7)
             self._marker(ax, geom["end_lon"], geom["end_lat"], "E", "red", zorder=7)
             ax.set_xlim(-172, -128)
@@ -663,8 +703,14 @@ class FlightVizPDF:
         dist_h, fz = geom["dist_h"], geom["fz"]
 
         scatter = ax.scatter(
-            dist_h, fz, c=speeds, cmap="plasma",
-            s=30, alpha=0.9, edgecolors="none", zorder=3,
+            dist_h,
+            fz,
+            c=speeds,
+            cmap="plasma",
+            s=30,
+            alpha=0.9,
+            edgecolors="none",
+            zorder=3,
         )
         ax.plot(dist_h, fz, "-", color="gray", lw=1, alpha=0.4, zorder=2)
 
@@ -690,10 +736,29 @@ class FlightVizPDF:
                 x, y = dist_h[idx], fz[idx]
 
                 ax.plot([x, x], [0, y], "r--", lw=1.5, alpha=0.6, zorder=4)
-                ax.scatter([x], [0], s=100, c="red", marker="v", edgecolors="black",
-                           linewidths=1.5, zorder=6, clip_on=False)
-                ax.scatter([x], [y], s=30, c="red", marker="o", edgecolors="black",
-                           linewidths=1, alpha=0.7, zorder=5, clip_on=False)
+                ax.scatter(
+                    [x],
+                    [0],
+                    s=100,
+                    c="red",
+                    marker="v",
+                    edgecolors="black",
+                    linewidths=1.5,
+                    zorder=6,
+                    clip_on=False,
+                )
+                ax.scatter(
+                    [x],
+                    [y],
+                    s=30,
+                    c="red",
+                    marker="o",
+                    edgecolors="black",
+                    linewidths=1,
+                    alpha=0.7,
+                    zorder=5,
+                    clip_on=False,
+                )
                 ax.text(
                     x,
                     fz.max() * 0.05,
@@ -761,26 +826,27 @@ class FlightVizPDF:
 
         with PdfPages(output_file) as pdf:
             pages_written = 0
-
-            for _, (flight_num, crosses) in enumerate(crossings_df.groupby("flight_num"), start=1):
+            for flight_num, crosses in crossings_df.groupby("flight_num"):
                 date = crosses["date"].iloc[0]
                 pages_written += int(
-                    self.create_flight_page(pdf, flight_num, crosses, date, plot_all_stations)
+                    self.create_flight_page(
+                        pdf,
+                        flight_num,
+                        crosses,
+                        date,
+                        plot_all_stations,
+                    )
                 )
 
-            meta = pdf.infodict()
-            meta["Title"] = "Aircraft Flight Trajectory Analysis"
-            meta["Author"] = "FlightViz"
-            meta["Subject"] = "Flight Path and Station Crossing Analysis"
-            meta["CreationDate"] = datetime.now()
+        print(f"Saved: {output_file}" if pages_written else "No pages written")
 
-        print(
-            f"Saved: {output_file}"
-            if pages_written
-            else "No pages were written. Check the flight trajectory file path."
-        )
-
-    def generate_grouped_pdfs(self, results, output_dir=None, plot_all_stations=False, suffix_func=None):
+    def generate_grouped_pdfs(
+        self,
+        results,
+        output_dir=None,
+        plot_all_stations=False,
+        suffix_func=None,
+    ):
         if results.empty:
             return
 
@@ -796,31 +862,35 @@ class FlightVizPDF:
             try:
                 self.generate_pdf_report(group, path, plot_all_stations)
             except Exception as exc:
-                print(f"Failed to generate PDF for flight {flight_num}: {exc}")
+                print(f"Failed: {flight_num} ({exc})")
 
     def generate_pdfs_by_date(self, date, max_crossing_km=5, output_dir=None):
-        df = self._filter(
+        df = self._filter_crossings(
             self.crossings.copy(),
             start_date=date,
             end_date=date,
             max_crossing_km=max_crossing_km,
         )
         if df.empty:
-            print(f"No flights found for date {date}")
+            print("No flights found")
             return
         self.generate_grouped_pdfs(df, output_dir=output_dir)
 
 
 def ask_date_range():
-    start_date = input("Enter start date in YYYYMMDD format, or press Enter for all dates: ").strip() or None
-    end_date = input("Enter end date, or press Enter for a single date: ").strip() if start_date else None
+    start_date = (
+        input("Start date YYYYMMDD, Enter for all: ").strip() or None
+    )
+    end_date = (
+        input("End date, Enter for one date: ").strip() if start_date else None
+    )
     return start_date, (end_date or start_date if start_date else None)
 
 
 def ask_common_options():
     start_date, end_date = ask_date_range()
-    max_dist = input("Enter maximum distance from stations in km, or press Enter to skip: ").strip()
-    plot_all = input("Plot all stations in the map area? Enter y or n: ").strip().lower() == "y"
+    max_dist = input("Max station distance in km, Enter to skip: ").strip()
+    plot_all = input("Plot all stations y/n: ").strip().lower() == "y"
     return start_date, end_date, float(max_dist) if max_dist else None, plot_all
 
 
@@ -828,14 +898,14 @@ def maybe_generate_pdfs(viz, results, plot_all_stations=False, suffix_func=None)
     if results.empty:
         return
     viz.summarize_query_results(results)
-    if input("Generate PDFs for these flights? Enter y or n: ").strip().lower() != "y":
+    if input("Generate PDF y/n: ").strip().lower() != "y":
         return
-    output_dir = input("Enter output directory, or press Enter for current directory: ").strip() or None
+    output_dir = input("Output directory, Enter for current: ").strip() or None
     viz.generate_grouped_pdfs(results, output_dir, plot_all_stations, suffix_func)
 
 
 def run_interactive_tool():
-    print("\nFlight Trajectory Query and PDF Generator\n")
+    print("\nFlight Trajectory Tool\n")
 
     viz = FlightVizPDF(
         flight_dir=FLIGHT_DIR,
@@ -845,21 +915,20 @@ def run_interactive_tool():
     )
 
     actions = {
-        "1": "Query by station name radius and time window",
-        "2": "Query by flight number",
-        "3": "Query specific flight station crossing",
-        "4": "Generate PDFs for all flights on a date",
+        "1": "Station radius and time",
+        "2": "Flight number",
+        "3": "Specific flight-station crossing",
+        "4": "All flights on a date",
         "5": "Exit",
     }
 
     while True:
-        print("\nQuery options")
+        print("\nOptions")
         for key, label in actions.items():
             print(f"{key}. {label}")
 
-        choice = input("Enter your choice: ").strip()
+        choice = input("Choice: ").strip()
         if choice == "5":
-            print("Exiting")
             break
         if choice not in actions:
             print("Invalid choice")
@@ -867,11 +936,11 @@ def run_interactive_tool():
 
         try:
             if choice == "1":
-                station_name = input("Enter station name: ").strip().upper()
+                station_name = input("Station: ").strip().upper()
                 if viz.stations[viz.stations["Station"] == station_name].empty:
-                    print(f"Station '{station_name}' not found")
+                    print("Station not found")
                     continue
-                radius_km = float(input("Enter search radius in km: ").strip())
+                radius_km = float(input("Radius km: ").strip())
                 start_date, end_date, max_dist, plot_all = ask_common_options()
                 results = viz.query_flights_by_station(
                     station_name=station_name,
@@ -883,20 +952,29 @@ def run_interactive_tool():
                 maybe_generate_pdfs(viz, results, plot_all)
 
             elif choice == "2":
-                numbers = [x.strip() for x in input("Enter flight numbers separated by commas: ").split(",")]
+                numbers = [x.strip() for x in input("Flight numbers: ").split(",")]
                 start_date, end_date, max_dist, plot_all = ask_common_options()
-                results = viz.query_flights_by_numbers(numbers, start_date, end_date, max_dist)
+                results = viz.query_flights_by_numbers(
+                    numbers,
+                    start_date,
+                    end_date,
+                    max_dist,
+                )
                 maybe_generate_pdfs(viz, results, plot_all)
 
             elif choice == "3":
-                flight_num = input("Enter flight number: ").strip()
-                station_name = input("Enter station name: ").strip().upper()
-                date = input("Enter date in YYYYMMDD format: ").strip()
-                plot_all = input("Plot all stations in map area? Enter y or n: ").strip().lower() == "y"
+                flight_num = input("Flight number: ").strip()
+                station_name = input("Station: ").strip().upper()
+                date = input("Date YYYYMMDD: ").strip()
+                plot_all = input("Plot all stations y/n: ").strip().lower() == "y"
 
-                result = viz.query_flight_station_crossing(flight_num, station_name, date)
-                if not result.empty and input("Generate PDF for this flight? Enter y or n: ").strip().lower() == "y":
-                    output_dir = input("Enter output directory, or press Enter for current directory: ").strip() or None
+                result = viz.query_flight_station_crossing(
+                    flight_num,
+                    station_name,
+                    date,
+                )
+                if not result.empty and input("Generate PDF y/n: ").strip().lower() == "y":
+                    output_dir = input("Output directory, Enter for current: ").strip() or None
                     viz.generate_grouped_pdfs(
                         result,
                         output_dir,
@@ -905,13 +983,17 @@ def run_interactive_tool():
                     )
 
             elif choice == "4":
-                date = input("Enter date in YYYYMMDD format: ").strip()
+                date = input("Date YYYYMMDD: ").strip()
                 if len(date) != 8 or not date.isdigit():
-                    print("Invalid date format. Use YYYYMMDD.")
+                    print("Invalid date")
                     continue
-                max_dist = input("Enter maximum crossing distance in km, default is 5: ").strip()
-                output_dir = input("Enter output directory, or press Enter for current directory: ").strip() or None
-                viz.generate_pdfs_by_date(date, float(max_dist) if max_dist else 5.0, output_dir)
+                max_dist = input("Max crossing distance km, default 5: ").strip()
+                output_dir = input("Output directory, Enter for current: ").strip() or None
+                viz.generate_pdfs_by_date(
+                    date,
+                    float(max_dist) if max_dist else 5.0,
+                    output_dir,
+                )
 
         except ValueError as exc:
             print(f"Invalid input: {exc}")

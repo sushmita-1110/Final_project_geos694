@@ -13,6 +13,8 @@ This project provides a structured workflow for identifying aircraft crossings n
 - generating spectrogram figures from downloaded MiniSEED files
 - creating PDF reports that summarize flight geometry and station-crossing information
 
+The repository also includes a `LAB7/` folder with a separate station-mapping exercise using PyGMT.
+
 ## How
 
 The workflow is split into modular scripts:

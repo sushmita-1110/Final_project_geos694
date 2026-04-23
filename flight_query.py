@@ -1,3 +1,8 @@
+"""
+Interactive tool for querying aircraft-station crossings and generating
+flight-path PDF reports with map and profile views.
+"""
+
 from pathlib import Path
 import math
 
@@ -10,7 +15,7 @@ import numpy as np
 import pandas as pd
 import pyproj
 
-
+# Input data paths
 FLIGHT_DIR = Path("/scratch/irseppi/nodal_data/flightradar24")
 STATION_FILE = Path(
     "/home/smaurya/repository/parkshwynodal/local_data_fetch/gmap-stations_H??.txt"
@@ -38,6 +43,7 @@ class FlightVizPDF:
         ])
         return stations
 
+    # Read crossing file and standardize column types used in queries
     @staticmethod
     def _load_crossings(crossing_file):
         df = pd.read_csv(crossing_file, sep="\t")
@@ -227,6 +233,7 @@ class FlightVizPDF:
         if not df.empty:
             print(f"{len(df)} crossings")
 
+    # Compute projected coordinates, altitude, cumulative distance, and map bounds
     def _geom(self, flight):
         start_lon = flight["longitude"].iloc[0]
         start_lat = flight["latitude"].iloc[0]
@@ -263,6 +270,7 @@ class FlightVizPDF:
             "end_lat": end_lat,
         }
 
+    # Estimate flight speed from snapshot times, with a fallback if timing is missing
     def _speed(self, flight, geom):
         fx, fy, fz, dist_h = (
             geom["fx"],
@@ -492,6 +500,7 @@ class FlightVizPDF:
                 ax, st, st["lon"], st["lat"], st["lon"], st["lat"] + offset
             )
 
+    # Draw the main flight map with altitude-colored trajectory and station markers
     def _draw_main_map(self, fig, flight, geom, stations):
         bbox, fz = geom["bbox"], geom["fz"]
 
@@ -619,6 +628,7 @@ class FlightVizPDF:
             spine.set_edgecolor("black")
             spine.set_linewidth(1.5)
 
+    # Draw along-track elevation profile and mark station crossing locations
     def _draw_profile(self, fig, flight, crosses, geom, speeds):
         ax = fig.add_axes([0.08, 0.12, 0.79, 0.28])
         dist_h, fz = geom["dist_h"], geom["fz"]

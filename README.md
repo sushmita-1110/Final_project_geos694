@@ -2,6 +2,8 @@
 
 This project presents a workflow for querying aircraft crossings near seismic stations, downloading waveform data, generating spectrograms, and creating flight-path PDF reports for seismic and aircraft-analysis applications. It was developed as the final project for **GEOS 694: Introduction to Computational Geosciences (Bryant Chow)**.
 
+## Version: 1.0.0
+
 ## What
 
 This project provides a structured workflow for identifying aircraft crossings near seismic stations and analyzing the associated data products. The repository includes tools for:

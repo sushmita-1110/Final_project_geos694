@@ -1,7 +1,10 @@
 from pathlib import Path
 import math
-
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.ticker as mticker
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 import pyproj
@@ -408,7 +411,6 @@ class FlightVizPDF:
         label = f"{length_m / 1000:.0f} km" if length_m >= 1000 else f"{length_m:.0f} m"
 
         if use_cartopy:
-            import cartopy.crs as ccrs
             x0 = math.ceil(bbox["lon_min"])
             y0 = bbox["lat_min"] + (bbox["lat_max"] - bbox["lat_min"]) * 0.08
             plot_kwargs = {"transform": ccrs.PlateCarree(), "zorder": 20}
@@ -478,7 +480,6 @@ class FlightVizPDF:
     def _plot_stations(ax, stations, bbox, projection=None):
         offset = (bbox["lat_max"] - bbox["lat_min"]) * 0.035
         if projection is not None:
-            import cartopy.crs as ccrs
             for st in stations:
                 coord = projection.transform_point(
                     st["lon"], st["lat"], ccrs.PlateCarree()
@@ -510,9 +511,6 @@ class FlightVizPDF:
     def _draw_main_map(self, fig, flight, geom, stations):
         bbox, fz = geom["bbox"], geom["fz"]
         try:
-            import cartopy.crs as ccrs
-            import cartopy.feature as cfeature
-            import matplotlib.ticker as mticker
 
             proj = ccrs.AlbersEqualArea(
                 central_longitude=-154,
@@ -640,8 +638,6 @@ class FlightVizPDF:
 
     def _draw_inset(self, fig, geom):
         try:
-            import cartopy.crs as ccrs
-            import cartopy.feature as cfeature
 
             proj = ccrs.AlbersEqualArea(
                 central_longitude=-154,

@@ -65,6 +65,7 @@ Thank you to **Bella Seppi** for making related workflow components and research
 ## Clone this repository
 
 git clone git@github.com:sushmita-1110/Final_project_geos694.git
+
 cd Final_project_geos694
 
 ## Installation

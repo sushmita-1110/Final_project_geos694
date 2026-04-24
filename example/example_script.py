@@ -1,24 +1,27 @@
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pyproj
-from matplotlib.backends.backend_pdf import PdfPages
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 from scipy.signal import spectrogram
 
+BASE_DIR = Path(__file__).resolve().parent
+REPO_DIR = BASE_DIR.parent
+sys.path.append(str(REPO_DIR))
 
-# ---------------------------------------------------------------------
-# One-flight example settings
-# ---------------------------------------------------------------------
-FLIGHT_DIR = Path("flightradar24")
-STATION_FILE = Path(
-    "../gmap-stations_H??.txt"
-)
-OUTPUT_DIR = Path("C130_output")
+from flight_query import FlightVizPDF
 
+# Paths
+FLIGHT_DIR = BASE_DIR / "flightradar24"
+STATION_FILE = REPO_DIR / "gmap-stations_H??.txt"
+CROSSING_FILE = REPO_DIR / "crossings_final50.txt"
+OUTPUT_DIR = BASE_DIR / "C130_output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# One-flight example
 NETWORK = "AK"
 STATION = "FIRE"
 LOCATION = ""
@@ -31,8 +34,6 @@ WINDOW_SEC = 120
 WIN_LEN = 1.0
 HP_FREQ = 10.0
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -42,99 +43,19 @@ def base_name():
     return f"{NETWORK}.{STATION}.{LOCATION}.{CHANNEL}_{EQUIPMENT}_{time_tag}"
 
 
-def load_station():
-    stations = pd.read_csv(STATION_FILE, sep="|")
-    stations["Station"] = stations["Station"].astype(str).str.strip().str.upper()
-    row = stations[stations["Station"] == STATION]
-    if row.empty:
-        raise ValueError(f"Station '{STATION}' not found in {STATION_FILE}")
-    return row.iloc[0]
-
-
-def load_flight_track():
-    date = T0.strftime("%Y%m%d")
-    path = FLIGHT_DIR / f"{date}_positions" / f"{date}_{FLIGHT_NUM}.csv"
-    if not path.exists():
-        raise FileNotFoundError(f"Flight track file not found: {path}")
-    return pd.read_csv(path)
-
-
-def load_flight_metadata():
-    date = T0.strftime("%Y%m%d")
-    path = FLIGHT_DIR / f"{date}_flights.csv"
-    info = {"callsign": "Unknown", "tail": "Unknown", "equip": EQUIPMENT}
-
-    if not path.exists():
-        return info
-
-    df = pd.read_csv(path)
-    if "flight_id" not in df.columns:
-        return info
-
-    df["flight_id"] = df["flight_id"].astype(str)
-    row = df[df["flight_id"] == FLIGHT_NUM]
-    if row.empty:
-        return info
-
-    row = row.iloc[0]
-    info["callsign"] = (
-        str(row.get("callsign", "Unknown"))
-        if pd.notna(row.get("callsign"))
-        else "Unknown"
-    )
-    info["tail"] = (
-        str(row.get("aircraft_id", "Unknown"))
-        if pd.notna(row.get("aircraft_id"))
-        else "Unknown"
-    )
-    info["equip"] = (
-        str(row.get("equip", EQUIPMENT))
-        if pd.notna(row.get("equip"))
-        else EQUIPMENT
-    )
-    return info
-
-
-def haversine_distance(lon1, lat1, lon2, lat2):
-    lon1, lat1, lon2, lat2 = map(
-        np.radians, [lon1, lat1, np.asarray(lon2), np.asarray(lat2)]
-    )
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = (
-        np.sin(dlat / 2.0) ** 2
-        + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
-    )
-    return 6371.0 * 2.0 * np.arcsin(np.sqrt(a))
-
-
-def cumulative_distance_km(lon, lat, zone=6):
-    proj = pyproj.Proj(proj="utm", zone=zone, ellps="WGS84")
-    x, y = proj(np.asarray(lon), np.asarray(lat))
-    out = np.zeros(len(x))
-    out[1:] = np.cumsum(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2)) / 1000.0
-    return out
-
-
 def remove_median(spec):
     return np.clip(spec - np.median(spec, axis=1, keepdims=True), 0, None)
 
 
-# ---------------------------------------------------------------------
-# Step 1: Download waveform from IRIS
-# ---------------------------------------------------------------------
 def download_waveform():
     client = Client("IRIS")
-    start = T0 - WINDOW_SEC
-    end = T0 + WINDOW_SEC
-
     st = client.get_waveforms(
         network=NETWORK,
         station=STATION,
         location=LOCATION,
         channel=CHANNEL,
-        starttime=start,
-        endtime=end,
+        starttime=T0 - WINDOW_SEC,
+        endtime=T0 + WINDOW_SEC,
         attach_response=False,
     )
     st.merge(method=1, fill_value=0)
@@ -205,7 +126,7 @@ def make_spectrogram_png(st):
 
         title = (
             f"{NETWORK}.{STATION}.{LOCATION}.{CHANNEL} {EQUIPMENT} - "
-            f"starting {T0.strftime('%Y-%m-%dT%H:%M:%S')}  "
+            f"starting {T0.strftime('%Y-%m-%dT%H:%M:%S')} "
             f"[Waveform HP {HP_FREQ:.0f} Hz]"
         )
 
@@ -262,8 +183,7 @@ def make_spectrogram_png(st):
         ax4.set_ylabel("Frequency (Hz)", labelpad=-2)
         ax4.yaxis.set_label_position("left")
         ax4.yaxis.tick_left()
-        ax4.tick_params(bottom=False, labelbottom=False, left=True, 
-                        labelleft=True)
+        ax4.tick_params(bottom=False, labelbottom=False, left=True, labelleft=True)
         ax4.grid(axis="y", alpha=0.3)
 
         png = OUTPUT_DIR / f"{base_name()}_spectrogram.png"
@@ -275,125 +195,54 @@ def make_spectrogram_png(st):
             plt.close(fig)
 
 
-# ---------------------------------------------------------------------
-# Step 3: Make simple flight-summary PDF
-# ---------------------------------------------------------------------
-def make_pdf_summary(flight, station, info):
-    lon = flight["longitude"].to_numpy()
-    lat = flight["latitude"].to_numpy()
-    alt_m = flight["altitude"].to_numpy() * 0.3048
-
-    d_km = haversine_distance(
-        station["Longitude"],
-        station["Latitude"],
-        lon,
-        lat,
+def make_flight_query_style_pdf():
+    viz = FlightVizPDF(
+        flight_dir=FLIGHT_DIR,
+        station_file=STATION_FILE,
+        crossing_file=CROSSING_FILE,
+        utm_zone=6,
     )
-    idx = int(np.argmin(d_km))
-    dist_track_km = cumulative_distance_km(lon, lat)
 
-    pdf_path = OUTPUT_DIR / f"{base_name()}_flightpath.pdf"
+    date = T0.strftime("%Y%m%d")
+    results = viz.crossings[
+        (viz.crossings["network"].astype(str).str.strip().str.upper() == NETWORK)
+        & (viz.crossings["station"].astype(str).str.strip().str.upper() == STATION)
+        & (viz.crossings["flight_num"].astype(str) == FLIGHT_NUM)
+        & (viz.crossings["date"].astype(str) == date)
+        & (viz.crossings["channel"].astype(str).str.strip().str.upper() == CHANNEL)
+    ].copy()
 
-    with PdfPages(pdf_path) as pdf:
-        fig = plt.figure(figsize=(11, 8.5))
-        gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.1], hspace=0.30, 
-                              wspace=0.25)
+    if results.empty:
+        raise ValueError("No matching crossing found in crossings_final50.txt")
 
-        ax_info = fig.add_subplot(gs[0, 0])
-        ax_map = fig.add_subplot(gs[0, 1])
-        ax_profile = fig.add_subplot(gs[1, :])
+    viz.generate_grouped_pdfs(
+        results,
+        output_dir=OUTPUT_DIR,
+        plot_all_stations=False,
+        suffix_func=lambda group: f"station_{group.iloc[0]['station']}",
+    )
 
-        ax_info.axis("off")
-        lines = [
-            f"Flight number: {FLIGHT_NUM}",
-            f"Aircraft type: {info['equip']}",
-            f"Callsign: {info['callsign']}",
-            f"Tail: {info['tail']}",
-            f"Network: {NETWORK}",
-            f"Station: {STATION}",
-            f"Channel: {CHANNEL}",
-            f"Crossing time (UTC): {T0.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"Closest flight-track distance: {d_km[idx] * 1000:.0f} m",
-            f"Altitude at closest point: {alt_m[idx]:.0f} m",
-        ]
-        y = 0.95
-        for line in lines:
-            ax_info.text(0.02, y, line, fontsize=10, va="top")
-            y -= 0.09
-
-        ax_map.plot(lon, lat, "k-", lw=1.2, label="Flight track")
-        ax_map.scatter(lon[0], lat[0], s=60, c="green", label="Start", zorder=3)
-        ax_map.scatter(lon[-1], lat[-1], s=60, c="red", label="End", zorder=3)
-        ax_map.scatter(
-            station["Longitude"],
-            station["Latitude"],
-            s=90,
-            marker="v",
-            c="blue",
-            label=STATION,
-            zorder=4,
-        )
-        ax_map.scatter(
-            lon[idx],
-            lat[idx],
-            s=80,
-            c="orange",
-            label="Closest approach",
-            zorder=4,
-        )
-        ax_map.set_xlabel("Longitude")
-        ax_map.set_ylabel("Latitude")
-        ax_map.set_title("Flight path and station")
-        ax_map.grid(True, alpha=0.3)
-        ax_map.legend(fontsize=8)
-
-        ax_profile.plot(dist_track_km, alt_m, "k-", lw=1.2)
-        ax_profile.scatter(
-            dist_track_km[0], alt_m[0], s=50, c="green", zorder=3, label="Start"
-        )
-        ax_profile.scatter(
-            dist_track_km[-1], alt_m[-1], s=50, c="red", zorder=3, label="End"
-        )
-        ax_profile.axvline(
-            dist_track_km[idx],
-            color="orange",
-            ls="--",
-            lw=1.5,
-            label="Closest approach",
-        )
-        ax_profile.scatter(
-            dist_track_km[idx], alt_m[idx], s=70, c="orange", zorder=4
-        )
-        ax_profile.set_xlabel("Cumulative horizontal distance (km)")
-        ax_profile.set_ylabel("Altitude (m)")
-        ax_profile.set_title("Flight altitude profile")
-        ax_profile.grid(True, alpha=0.3)
-        ax_profile.legend(fontsize=8)
-
-        fig.suptitle(base_name(), fontsize=13, y=0.98)
-        pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-    return pdf_path
+    row = results.iloc[0]
+    return OUTPUT_DIR / (
+        f"{row['date']}_{row['flight_num']}_{row['equipment']}"
+        f"_station_{row['station']}.pdf"
+    )
 
 
 def main():
-    print("Running C130-flight example")
+    print("Running C130 workflow")
     print(f"Flight: {FLIGHT_NUM}")
     print(f"Station: {NETWORK}.{STATION}.{LOCATION}.{CHANNEL}")
     print(f"Time: {T0}")
 
-    station = load_station()
-    flight = load_flight_track()
-    info = load_flight_metadata()
-
     st, mseed_path = download_waveform()
     png_path = make_spectrogram_png(st)
-    pdf_path = make_pdf_summary(flight, station, info)
+    pdf_path = make_flight_query_style_pdf()
 
+    print("\nFinished")
     print(f"Waveform saved to: {mseed_path}")
     print(f"Spectrogram saved to: {png_path}")
-    print(f"Flight path saved to: {pdf_path}")
+    print(f"PDF saved to: {pdf_path}")
 
 
 if __name__ == "__main__":

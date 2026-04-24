@@ -13,7 +13,7 @@ This project provides a structured workflow for identifying aircraft crossings n
 - generating spectrogram figures from downloaded MiniSEED files
 - creating PDF reports that summarize flight geometry and station-crossing information
 
-The repository also includes a `LAB7/` folder with a separate station-mapping exercise using PyGMT.
+The repository also includes a `Station_map/` folder with a separate station-mapping exercise using PyGMT.
 
 ## How
 
@@ -82,7 +82,7 @@ conda activate aircraftseismo
 
 ## For class reviewers
 
-The primary Python file for class review is `example/example_script.py`. The other main workflow files are `fetch_data.py` and `spectrogram.py`, though I leave that to your preference. Please feel free to explore the repository further as needed.
+The primary Python file for class review is `example/example_script.py`. The other main workflow files are `fetch_data.py`, `spectrogram.py` and `Station_map/byoc_station_map.py`, though I leave that to your preference. Please feel free to explore the repository further as needed.
 
 ## Acknowledgments 
 

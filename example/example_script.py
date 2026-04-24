@@ -8,11 +8,12 @@ from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 from scipy.signal import spectrogram
 
+# Reuse the main PDF plotting workflow from the project flight-query tool
+from flight_query import FlightVizPDF
+
 BASE_DIR = Path(__file__).resolve().parent
 REPO_DIR = BASE_DIR.parent
 sys.path.append(str(REPO_DIR))
-
-from flight_query import FlightVizPDF
 
 # Paths
 FLIGHT_DIR = BASE_DIR / "flightradar24"
@@ -66,7 +67,7 @@ def download_waveform():
 
 
 # ---------------------------------------------------------------------
-# Step 2: Make spectrogram PNG using the same logic as spectrogram.py
+# Make spectrogram PNG using the same logic as spectrogram.py
 # ---------------------------------------------------------------------
 def make_spectrogram_png(st):
     fig = None
@@ -194,7 +195,9 @@ def make_spectrogram_png(st):
         if fig is not None:
             plt.close(fig)
 
-
+# ---------------------------------------------------------------------
+# Use FlightVizPDF so the PDF matches the main workflow.
+# ---------------------------------------------------------------------
 def make_flight_query_style_pdf():
     viz = FlightVizPDF(
         flight_dir=FLIGHT_DIR,
@@ -230,7 +233,7 @@ def make_flight_query_style_pdf():
 
 
 def main():
-    print("Running C130 workflow")
+    print("Running C130-flight workflow")
     print(f"Flight: {FLIGHT_NUM}")
     print(f"Station: {NETWORK}.{STATION}.{LOCATION}.{CHANNEL}")
     print(f"Time: {T0}")

@@ -82,7 +82,25 @@ conda activate aircraftseismo
 
 ## For class reviewers
 
-The primary Python file for class review is `example/example_script.py`. The other main workflow files are `fetch_data.py`, `spectrogram.py` and `Station_map/byoc_station_map.py`, though I leave that to your preference. Please feel free to explore the repository further as needed.
+The primary Python file for class review is `example/example_script.py`. The other main workflow files are `fetch_data.py`, `spectrogram.py` and `Station_map/byoc_station_map.py`, though I leave that to your preference. 
+
+### Fetch waveform data from IRIS
+
+```python
+python fetch_data.py
+```
+
+For `fetch_data.py`, you do not need to wait for full completion, since it may take time to download a large amount of data. Running it for 1 to 2 minutes is enough for review. You may then stop it with `Ctrl + Z`. At that point, an `output/miniSEED/` folder should be created, containing waveform files organized by seismic station.
+
+### Generate spectrograms
+
+```python
+python spetrogram.py
+```
+
+You may then run `spectrogram.py`. Again, you do not need to wait for full completion. Running it for 1 to 2 minutes is sufficient, and you may stop it with `Ctrl + Z`. After that, the `output/spectrogram/` folder should contain waveform and spectrogram PNG files organized by station.
+
+Please feel free to explore the repository further as needed.
 
 Note: `flight_query.py` may also be useful to review, although some of its flight-path functionality depends on flightradar24 data stored on the LUNGS scratch system, so not all parts may be directly runnable in this repository. 
 

@@ -21,3 +21,6 @@ Install the required packages before running the script:
 ```bash
 pip install pandas
 conda install -c conda-forge pygmt
+```
+
+**Note:** No additional installation is needed if you have already created the `aircraftseismo` environment from the main `environment.yaml` file.

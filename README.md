@@ -84,6 +84,8 @@ conda activate aircraftseismo
 
 The primary Python file for class review is `example/example_script.py`. The other main workflow files are `fetch_data.py`, `spectrogram.py` and `Station_map/byoc_station_map.py`, though I leave that to your preference. Please feel free to explore the repository further as needed.
 
+Note: `flight_query.py` may also be useful to review, although some of its flight-path functionality depends on flightradar24 data stored on the LUNGS scratch system, so not all parts may be directly runnable in this repository. 
+
 ## Acknowledgments 
 
 Parts of this workflow were developed with guidance from and inspiration from existing code by **Bella Seppi**. Some ideas and code structure were adapted from the following repository: - uafgeotools/parkshwynodal(https://github.com/uafgeotools/parkshwynodal) 

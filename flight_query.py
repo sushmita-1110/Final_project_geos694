@@ -17,12 +17,8 @@ import pyproj
 
 # Input data paths
 FLIGHT_DIR = Path("/scratch/irseppi/nodal_data/flightradar24")
-STATION_FILE = Path(
-    "/home/smaurya/repository/parkshwynodal/local_data_fetch/gmap-stations_H??.txt"
-)
-CROSSING_FILE = Path(
-    "/home/smaurya/repository/parkshwynodal/local_data_fetch/crossings_final50.txt"
-)
+STATION_FILE = Path("gmap-stations_H??.txt")
+CROSSING_FILE = Path("crossings_final50.txt")
 
 
 class FlightVizPDF:

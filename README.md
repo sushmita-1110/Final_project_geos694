@@ -22,6 +22,7 @@ The workflow is split into modular scripts:
 - `fetch_data.py` downloads waveform data from IRIS
 - `spectrogram.py` builds spectrogram products from downloaded MiniSEED files
 - `flight_query.py` provides an interactive query and PDF-generation tool
+- `example/example_script.py` gives a compact one-flight example that downloads waveform data, generates a spectrogram, and creates a flight-path PDF 
 
 The code uses reusable functions and a central `FlightVizPDF` class to organize data access, querying, plotting, and PDF export.
 

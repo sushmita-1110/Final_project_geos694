@@ -72,10 +72,10 @@ def download_waveform():
 def make_spectrogram_png(st):
     fig = None
     try:
-        tr = st[0].copy()
+        tr = st[0].copy() # Work with the first trace in the downloaded stream
         fs = float(tr.stats.sampling_rate)
 
-        raw = tr.data.astype(float)
+        raw = tr.data.astype(float) # Store raw waveform for spectrogram calculation
         if fs / 2 <= HP_FREQ:
             return None
 
@@ -87,10 +87,11 @@ def make_spectrogram_png(st):
         wf = trf.data.astype(float)
         tw = trf.times()
 
-        nper = max(int(WIN_LEN * fs), 8)
-        if len(raw) < 2 * nper:
+        nper = max(int(WIN_LEN * fs), 8) # Set spectrogram window length in samples
+        if len(raw) < 2 * nper: # Skip if waveform is too short
             return None
 
+        # Compute spectrogram from the raw waveform
         f, t, sxx = spectrogram(
             raw,
             fs,
@@ -105,7 +106,7 @@ def make_spectrogram_png(st):
 
         spec = 10 * np.log10(remove_median(sxx) + 1e-12)
 
-        mask = f >= HP_FREQ
+        mask = f >= HP_FREQ # Keep frequencies above the high pass limit
         if not np.any(mask):
             return None
 
@@ -118,6 +119,7 @@ def make_spectrogram_png(st):
         if finite_all.size == 0 or finite_mid.size == 0:
             return None
 
+        # Choose color limits for the spectrogram
         vmin = np.percentile(finite_all, 65)
         vmax = np.max(finite_mid)
         if vmax <= vmin:

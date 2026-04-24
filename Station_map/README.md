@@ -11,7 +11,7 @@ The script:
 - saves the final figure as a PNG file
 
 ## Files
-- `byoc_updated_station_map.py` — main Python script
+- `byoc_station_map.py` — main Python script
 - `gmap-stations-AK.txt` — input station file
 - `AK_station_alaska_map.png` — output map image
 

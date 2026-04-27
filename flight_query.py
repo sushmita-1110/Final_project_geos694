@@ -27,11 +27,16 @@ class FlightVizPDF:
     def __init__(self, flight_dir, station_file, crossing_file, utm_zone=6):
         self.flight_dir = Path(flight_dir)
         self.utm = pyproj.Proj(proj="utm", zone=utm_zone, ellps="WGS84")
+
+        # Load station metadata and crossing metadata used throughout the workflow
         self.stations = self._load_stations(station_file)
         self.crossings = self._load_crossings(crossing_file)
         print(f"Loaded {len(self.crossings)} crossings and {len(self.stations)} stations")
 
     def _load_stations(self, station_file):
+        """
+        Read station metadata and compute projected UTM coordinates.
+        """
         stations = pd.read_csv(station_file, sep="|")
         stations["UTM_X"], stations["UTM_Y"] = zip(*[
             self.utm(lon, lat)
@@ -58,6 +63,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _read_csv(path, **kwargs):
+        """
+        Read a CSV file, returning None if the file is missing or unreadable.
+        """
         path = Path(path)
         if not path.exists():
             return None
@@ -69,6 +77,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _filter_crossings(df, start_date=None, end_date=None, max_crossing_km=None):
+        """
+        Filter crossings by date range and maximum crossing distance.
+        """
         if start_date:
             end_date = end_date or start_date
             df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
@@ -156,6 +167,7 @@ class FlightVizPDF:
     def query_flights_by_numbers(
         self, flight_numbers, start_date=None, end_date=None, max_crossing_km=None
     ):
+        """Query crossings for one or more flight numbers."""
         df = self.crossings[
             self.crossings["flight_num"].isin([str(f) for f in flight_numbers])
         ].copy()
@@ -171,6 +183,9 @@ class FlightVizPDF:
         end_date=None,
         max_crossing_km=None,
     ):
+        """
+        Find flights whose trajectories pass within a search radius of a station.
+        """
         match = self.stations[self.stations["Station"] == station_name]
         if match.empty:
             print("Station not found")
@@ -183,6 +198,7 @@ class FlightVizPDF:
         )
         keep = []
 
+        # Check each flight track to see whether it passes within the search radius.  
         for (date, flight_num), _ in df.groupby(["date", "flight_num"]):
             flight = self._read_csv(self._flight_path(date, flight_num))
             if flight is None:
@@ -211,6 +227,9 @@ class FlightVizPDF:
         return out
 
     def query_flight_station_crossing(self, flight_num, station_name, date):
+        """
+        Return the crossing row for one flight, one station, and one date.
+        """
         df = self.crossings[
             (self.crossings["flight_num"] == str(flight_num))
             & (self.crossings["station"] == str(station_name).upper())
@@ -311,6 +330,9 @@ class FlightVizPDF:
             return np.linspace(30, 60, len(fx)), 60.0
 
     def _station_records(self, crosses, bbox, plot_all_stations):
+        """
+        Build station records for map plotting, including crossing stations.
+        """
         out, seen = [], set()
 
         def add(name, lon, lat, is_crossing):
@@ -320,6 +342,7 @@ class FlightVizPDF:
                     {"name": name, "lon": lon, "lat": lat, "is_crossing": is_crossing}
                 )
 
+        # Always include crossing stations, and optionally include all stations in the map bounds
         for _, crossing in crosses.iterrows():
             match = self.stations[self.stations["Station"] == crossing["station"]]
             if not match.empty:
@@ -354,6 +377,7 @@ class FlightVizPDF:
         )
 
     def _draw_info(self, fig, flight_num, flight, info, geom, max_speed):
+        """Draw the metadata panel for the PDF page."""
         ax = fig.add_axes([0.05, 0.55, 0.22, 0.3])
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
@@ -583,6 +607,9 @@ class FlightVizPDF:
         self._scale_bar(ax, bbox, use_cartopy=True)
 
     def _draw_inset(self, fig, geom):
+        """
+        Draw the Alaska inset map showing the flight start and end points.
+        """
         proj = ccrs.AlbersEqualArea(
             central_longitude=-154,
             central_latitude=50,
@@ -720,6 +747,8 @@ class FlightVizPDF:
             spine.set_linewidth(2)
 
     def create_flight_page(self, pdf, flight_num, crosses, date, plot_all_stations=False):
+        """Create one PDF page for a single flight."""
+        # Load the flight track and build all components needed for the PDF page
         flight = self._read_csv(self._flight_path(date, flight_num))
         if flight is None:
             return False
@@ -740,6 +769,7 @@ class FlightVizPDF:
         return True
 
     def generate_pdf_report(self, crossings_df, output_file=None, plot_all_stations=False):
+        """Write one or more flight pages to a PDF."""
         if crossings_df.empty:
             print("No crossings to write")
             return
@@ -774,6 +804,9 @@ class FlightVizPDF:
         plot_all_stations=False,
         suffix_func=None,
     ):
+        """
+        Generate grouped PDFs for the specified results.
+        """
         if results.empty:
             return
 
@@ -792,6 +825,9 @@ class FlightVizPDF:
                 print(f"Failed: {flight_num} ({exc})")
 
     def generate_pdfs_by_date(self, date, max_crossing_km=5, output_dir=None):
+        """
+        Generate PDF reports for all flights on a given date.
+        """
         df = self._filter_crossings(
             self.crossings.copy(),
             start_date=date,
@@ -828,6 +864,7 @@ def maybe_generate_pdfs(viz, results, plot_all_stations=False, suffix_func=None)
 
 
 def run_interactive_tool():
+    # Launch the interactive menu-driven query tool
     print("\nFlight Trajectory Tool\n")
 
     viz = FlightVizPDF(
@@ -837,6 +874,7 @@ def run_interactive_tool():
         utm_zone=6,
     )
 
+    # Available query modes for the interactive menu
     actions = {
         "1": "Station radius and time",
         "2": "Flight number",
@@ -857,6 +895,7 @@ def run_interactive_tool():
             print("Invalid choice")
             continue
 
+        # Dispatch the selected query mode
         try:
             if choice == "1":
                 station_name = input("Station: ").strip().upper()

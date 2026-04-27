@@ -95,7 +95,7 @@ For `fetch_data.py`, you do not need to wait for full completion, since it may t
 ### Generate spectrograms
 
 ```python
-python spetrogram.py
+python spectrogram.py
 ```
 
 You may then run `spectrogram.py`. Again, you do not need to wait for full completion. Running it for 1 to 2 minutes is sufficient, and you may stop it with `Ctrl + Z`. After that, the `output/spectrogram/` folder should contain waveform and spectrogram PNG files organized by station.

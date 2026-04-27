@@ -89,6 +89,9 @@ class FlightVizPDF:
 
     @staticmethod
     def haversine_distance(lon1, lat1, lon2, lat2):
+        """
+        Compute great-circle distance in kilometers between lon/lat points.
+        """
         lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
         dlon = lon2 - lon1
         dlat = lat2 - lat1
@@ -100,6 +103,9 @@ class FlightVizPDF:
 
     @staticmethod
     def cumulative_distance(x, y, z=None, mode="horizontal"):
+        """
+        Compute cumulative horizontal or 3D distance along a track.
+        """
         x = np.asarray(x)
         y = np.asarray(y)
         if mode == "horizontal":
@@ -115,6 +121,9 @@ class FlightVizPDF:
 
     @staticmethod
     def moving_mean(values, window=5):
+        """
+        Smooth a 1D array with a centered moving mean.
+        """
         out = np.copy(values)
         for i in range(len(values)):
             j0 = max(0, i - window // 2)
@@ -123,15 +132,24 @@ class FlightVizPDF:
         return out
 
     def _flight_path(self, date, flight_num):
+        """
+        Build the path to a flight-trajectory CSV file.
+        """
         return self.flight_dir / f"{date}_positions" / f"{date}_{flight_num}.csv"
 
     def load_flights_metadata(self, date):
+        """
+        Load daily flight metadata for aircraft lookup.
+        """
         df = self._read_csv(self.flight_dir / f"{date}_flights.csv")
         if df is not None and "flight_id" in df.columns:
             df["flight_id"] = df["flight_id"].astype(str)
         return df
 
     def get_aircraft_info(self, date, flight_num):
+        """
+        Get aircraft information for a specific flight.
+        """
         df = self.load_flights_metadata(date)
         default = {"tail": "Unknown", "callsign": "Unknown", "equip": "Unknown"}
 
@@ -245,6 +263,9 @@ class FlightVizPDF:
         return df
 
     def summarize_query_results(self, df):
+        """
+        Summarize the results of a query.
+        """
         if not df.empty:
             print(f"{len(df)} crossings")
 
@@ -366,6 +387,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _time_fields(flight):
+        """
+        Get the start, end, and duration of a flight.
+        """
         if "snapshot_id" not in flight.columns:
             return "N/A", "N/A", "N/A"
         start = pd.to_datetime(flight["snapshot_id"].iloc[0], unit="s")
@@ -409,6 +433,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _marker(ax, x, y, label, face, **kwargs):
+        """
+        Add a marker with a label to the plot.
+        """
         ax.text(
             x,
             y,
@@ -429,6 +456,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _scale_bar(ax, bbox, use_cartopy=False):
+        """
+        Draw a scale bar using the current map bounds.
+        """
         lon_range = bbox["lon_max"] - bbox["lon_min"]
         lat_avg = (bbox["lat_min"] + bbox["lat_max"]) / 2.0
         meters_per_deg_lon = 111320.0 * np.cos(np.radians(lat_avg))
@@ -466,6 +496,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _station_label(ax, st, x, y, tx, ty, projection=None):
+        """
+        Add a label for a station to the plot.
+        """
         kwargs = {"transform": projection} if projection is not None else {}
         ax.scatter(
             [x],
@@ -501,6 +534,9 @@ class FlightVizPDF:
 
     @staticmethod
     def _plot_stations(ax, stations, bbox, projection=None):
+        """
+        Plot station markers and labels on the map.
+        """
         offset = (bbox["lat_max"] - bbox["lat_min"]) * 0.035
         if projection is not None:
             for st in stations:
@@ -804,9 +840,7 @@ class FlightVizPDF:
         plot_all_stations=False,
         suffix_func=None,
     ):
-        """
-        Generate grouped PDFs for the specified results.
-        """
+        # Generate grouped PDFs for the specified results.
         if results.empty:
             return
 

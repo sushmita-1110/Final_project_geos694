@@ -38,6 +38,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
     """
     fig = None
     try:
+        # Read the MiniSEED file and extract a single trace around the crossing time
         st = read(str(mseed_file))
         if not st: 
             return None
@@ -47,17 +48,20 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             return None
         tr.trim(t0 - WINDOW_SEC, t0 + WINDOW_SEC, pad=True, fill_value=0)
 
+        # Prepare waveform data and check that the sampling rate supports the filter
         raw = tr.data.astype(float)
         fs = float(tr.stats.sampling_rate)
         if fs / 2 <= HP_FREQ: 
             return None
 
+        # Filter a copy of the trace for waveform plotting
         trf = tr.copy()
         trf.detrend("demean")
         trf.taper(max_percentage=0.02, type="cosine")
         trf.filter("highpass", freq=HP_FREQ, corners=4, zerophase=True)
         wf, tw = trf.data.astype(float), trf.times()
 
+        # Compute the spectrogram with a window length based on the sampling rate   
         nper = max(int(WIN_LEN * fs), 8)
         if len(raw) < 2 * nper: 
             return None
@@ -66,6 +70,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         if Sxx.shape[1] < 2: 
             return None
 
+        # Remove the frequency-wise median and keep frequencies above the highpass cutoff
         spec = 10 * np.log10(remove_median(Sxx) + 1e-12)
         mask = f >= HP_FREQ
         if not np.any(mask): 
@@ -78,16 +83,19 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         if finite_all.size == 0 or finite_mid.size == 0: 
             return None
 
+        # Set color limits for a stable spectrogram display
         vmin = np.percentile(finite_all, 65)
         vmax = np.max(finite_mid)
         if vmax <= vmin: 
             vmax = vmin + 1
 
+        # Build the side spectrum panel from the median spectrum
         side = 10 * np.log10(np.median(Sxx[mask], axis=1) + 1e-12)
         fside = f[mask]
 
         title = f"{net}.{sta}.{loc}.{cha} {aircraft} - starting {t0.strftime('%Y-%m-%dT%H:%M:%S')}  [Waveform HP {HP_FREQ:.0f} Hz]"
 
+        # Create the figure layout: waveform, spectrogram, side spectrum, and colorbar
         fig = plt.figure(figsize=(8, 6))
         gs = GridSpec(2, 3, figure=fig,
                       height_ratios=[1, 1.1],
@@ -101,6 +109,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         ax2 = fig.add_subplot(gs[1, 1])
         ax3 = fig.add_subplot(gs[1, 2])
 
+        # Plot the filtered waveform
         ax1.plot(tw, wf, "k", lw=0.5)
         ax1.set_title(title)
         ax1.set_ylabel("Counts")
@@ -111,6 +120,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             lim = np.percentile(np.abs(good), 99.5)
             if lim > 0: ax1.set_ylim(-2.5 * lim, 2.5 * lim)
 
+        # Plot the spectrogram
         im = ax2.pcolormesh(t, f, spec, shading="gouraud", 
                             cmap="pink_r", vmin=vmin, vmax=vmax)
         ax2.set_xlabel("Time (s)")
@@ -133,7 +143,7 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
         ax4.tick_params(bottom=False, labelbottom=False, left=True, labelleft=True)
         ax4.grid(axis="y", alpha=0.3)
 
-        # Save output PNG
+        # Save output PNG using rank
         outdir.mkdir(parents=True, exist_ok=True)
         safe_time = t0.strftime("%Y-%m-%dT%H-%M-%S")
         aircraft = str(aircraft).strip().replace("/", "_").replace(" ", "_")

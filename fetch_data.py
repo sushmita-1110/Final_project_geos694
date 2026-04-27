@@ -1,3 +1,7 @@
+"""
+Download waveform windows from IRIS for aircraft-station crossings.
+"""
+
 import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -6,7 +10,7 @@ import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 
-# User input
+# Input crossing table and output directory for downloaded MiniSEED files
 CROSSING_FILE = Path("crossings_final50.txt")
 
 OUTPUT_ROOT = Path("output/miniSEED")
@@ -15,7 +19,8 @@ OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 TIME_WINDOW = 120
 MAX_WORKERS = 4
 
-# Network configurations
+# Allowed station, channel, and location combinations for each network
+# Network configurations 
 
 NETWORK_CONFIGS = {
     "AK": {
@@ -94,6 +99,9 @@ NETWORK_CONFIGS = {
 
 # Functions
 def safe_parse_time(value):
+    """
+    Convert a table value to UTCDateTime, returning None if parsing fails.
+    """
     try:
         return UTCDateTime(str(value).strip())
     except Exception:
@@ -101,6 +109,9 @@ def safe_parse_time(value):
 
 
 def download_with_iris(client, network, station, location, channel, timestamp, outdir):
+    """
+    Download one waveform window from IRIS and save it as MiniSEED.
+    """
     start = timestamp - TIME_WINDOW
     end = timestamp + TIME_WINDOW
 
@@ -134,6 +145,9 @@ def download_with_iris(client, network, station, location, channel, timestamp, o
 
 
 def process_row(row, network, channels, locations):
+    """
+    Try valid channel/location combinations for one crossing-table row.
+    """
     client = Client("IRIS")
 
     station = str(row["station"]).strip()
@@ -183,6 +197,7 @@ def process_row(row, network, channels, locations):
 
 
 def main():
+    # Read and clean the crossing table
     df = pd.read_csv(CROSSING_FILE, sep="\t")
     df.columns = df.columns.str.strip()
 
@@ -200,6 +215,7 @@ def main():
 
     total_saved = 0
 
+    # Loop through each configured network and process matching rows
     for network, config in NETWORK_CONFIGS.items():
         print(f"Processing Network: {network}")
 
@@ -213,6 +229,7 @@ def main():
         if net_df.empty:
             continue
 
+        # Download rows in parallel for faster waveform retrieval
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [
                 executor.submit(process_row, row, network, channels, locations)

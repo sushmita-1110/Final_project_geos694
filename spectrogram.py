@@ -1,3 +1,7 @@
+"""
+Make waveform and spectrogram figures from downloaded MiniSEED files.
+"""
+
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -6,6 +10,7 @@ from scipy.signal import spectrogram
 from matplotlib.gridspec import GridSpec
 from obspy import UTCDateTime, read
 
+# Input crossing table and output directory for spectrogram figures
 SUMMARY_CSV = Path("crossings_final50.txt")
 OUTPUT_ROOT = Path("output/spectrogram")
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -28,6 +33,9 @@ def remove_median(S):
     return np.clip(S - np.median(S, axis=1, keepdims=True), 0, None)
 
 def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=0):
+    """
+    Create and save one waveform-plus-spectrogram figure.
+    """
     fig = None
     try:
         st = read(str(mseed_file))
@@ -141,7 +149,9 @@ def make_spectrogram(mseed_file, t0, aircraft, net, sta, cha, loc, outdir, rank=
             plt.close(fig)
 
 def main():
-    # Read crossing file
+    """
+    Read the crossing table, match waveform files, and generate figures.
+    """
     df = pd.read_csv(SUMMARY_CSV, sep="\t")
     df.columns = df.columns.str.strip()
 
@@ -154,6 +164,7 @@ def main():
     df["d0_m"] = pd.to_numeric(df["d0_m"], errors="coerce")
     df = df.dropna(subset=["time_str", "network", "station", "channel"]).copy()
 
+    # Rebuild the expected MiniSEED file path from the fetch-data workflow
     def build_outfile(r):
         loc_tag = r["location"] if r["location"] else "NONE"
         time_tag = r["time_str"].strftime("%Y-%m-%dT%H-%M-%S")
@@ -173,6 +184,8 @@ def main():
                                 "channel", "location"]).cumcount() + 1
 
     ok = fail = 0
+
+    # Build one figure for each waveform file that exists
     for _, r in df.iterrows():
         loc = r["location"] if r["location"] else "NONE"
         made = make_spectrogram(

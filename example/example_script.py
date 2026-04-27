@@ -15,7 +15,7 @@ sys.path.append(str(REPO_DIR))
 # Reuse the main PDF plotting workflow from the project flight-query tool
 from flight_query import FlightVizPDF
 
-# Paths
+# Paths for local example data and output
 FLIGHT_DIR = BASE_DIR / "flightradar24"
 STATION_FILE = REPO_DIR / "gmap-stations_H??.txt"
 CROSSING_FILE = REPO_DIR / "crossings_final50.txt"
@@ -40,11 +40,17 @@ HP_FREQ = 10.0
 # Helpers
 # ---------------------------------------------------------------------
 def base_name():
+    """
+    Build a shared base filename for all outputs from this example.
+    """
     time_tag = T0.strftime("%Y-%m-%dT%H-%M-%S")
     return f"{NETWORK}.{STATION}.{LOCATION}.{CHANNEL}_{EQUIPMENT}_{time_tag}"
 
 
 def remove_median(spec):
+    """
+    Remove the median from each row of the spectrogram.
+    """
     return np.clip(spec - np.median(spec, axis=1, keepdims=True), 0, None)
 
 
@@ -70,6 +76,9 @@ def download_waveform():
 # Make spectrogram PNG using the same logic as spectrogram.py
 # ---------------------------------------------------------------------
 def make_spectrogram_png(st):
+    """
+    Create a spectrogram PNG from the downloaded waveform data.
+    """
     fig = None
     try:
         tr = st[0].copy() # Work with the first trace in the downloaded stream
@@ -201,6 +210,9 @@ def make_spectrogram_png(st):
 # Use FlightVizPDF so the PDF matches the main workflow.
 # ---------------------------------------------------------------------
 def make_flight_query_style_pdf():
+    """
+    Generate a PDF using the main FlightVizPDF workflow.
+    """
     viz = FlightVizPDF(
         flight_dir=FLIGHT_DIR,
         station_file=STATION_FILE,
@@ -235,6 +247,9 @@ def make_flight_query_style_pdf():
 
 
 def main():
+    """
+    Run the full one-flight example workflow.
+    """
     print("Running C130-flight workflow")
     print(f"Flight: {FLIGHT_NUM}")
     print(f"Station: {NETWORK}.{STATION}.{LOCATION}.{CHANNEL}")
